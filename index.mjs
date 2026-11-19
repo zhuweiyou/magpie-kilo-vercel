@@ -3,16 +3,18 @@
 //
 // One magpie account is one Vercel project named kilo-proxy-<random>. That
 // project has no application code; its static configuration rewrites every
-// request to Kilo's OpenAI-compatible API. The plugin itself speaks OpenAI (baseURL + apiKey) and talks through the proxy, so the
-// Vercel side never has to be redeployed when the plugin changes.
+// request to Kilo's OpenAI-compatible API. The plugin itself speaks OpenAI
+// (baseURL + apiKey) and talks through the proxy, so the Vercel side never has
+// to be redeployed when the plugin changes.
 //
-// Clicking "Add account" opens Vercel's clone page for the proxy directory and
-// waits for the new project's /models to answer; the finished account is just
-// the proxy's origin. magpie's own account routing then spreads requests over
-// all the proxies, each of which has its own egress IP.
+// Clicking "Add account" signs in to Vercel once (device code), then the plugin
+// creates the project through Vercel's API and uploads the proxy files itself:
+// no Git repository, no clone, nothing to fill in. magpie's own account routing
+// then spreads requests over all the proxies, each with its own egress IP.
 
-import { buildCloneURL, originOf, projectName, proxyBaseURL } from "./proxy.mjs"
+import { originOf, projectName, proxyBaseURL } from "./proxy.mjs"
 import * as models from "./models.mjs"
+import * as vercel from "./vercel.mjs"
 
 const PROVIDER = "kilo-vercel"
 
@@ -151,25 +153,36 @@ export async function KiloProxyVercelPlugin({ client: magpie } = {}, options = {
           type: "oauth",
           label: "Add a Kilo Vercel proxy node",
           async authorize() {
+            const device = await vercel.startDevice()
             const project = projectName()
             return {
-              url: buildCloneURL(project),
+              url: device.verify,
               instructions:
-                `在打开的 Vercel 页面创建项目（不需要填任何环境变量）：\n` +
-                `  项目名：${project}\n` +
-                `  如果页面分两步（先建 Git 仓库、再确认部署），请一直点到「部署完成」。\n` +
-                `部署完成后保持页面，插件会自动检测并添加。`,
+                `在浏览器完成 Vercel 授权（设备码：${device.userCode}）。\n` +
+                `授权后插件会自动创建代理项目 ${project} 并部署，不需要填任何东西。`,
               method: "auto",
               async callback() {
-                log(`waiting for ${originOf(project)} to deploy`)
-                const result = await waitForProxy(project)
-                if (!result.ok) return { type: "failed", error: result.reason || "proxy did not become ready" }
-                return {
-                  type: "success",
-                  access: "anonymous",
-                  accountId: project,
-                  username: project,
-                  projectName: project,
+                try {
+                  log(`Vercel sign-in finished, creating ${project}`)
+                  const token = await vercel.pollDevice(device)
+                  const created = await vercel.ensureProject(token.access_token, project)
+                  await vercel.clearProtection(token.access_token, created.id)
+                  const files = await vercel.templateFiles()
+                  log(`deploying ${project}`)
+                  await vercel.deployFiles(token.access_token, project, files, {
+                    timeoutMs: 15 * 60 * 1000,
+                  })
+                  const ready = await waitForProxy(project)
+                  if (!ready.ok) return { type: "failed", error: ready.reason || "proxy did not become ready" }
+                  return {
+                    type: "success",
+                    access: "anonymous",
+                    accountId: project,
+                    username: project,
+                    projectName: project,
+                  }
+                } catch (error) {
+                  return { type: "failed", error: String(error?.message || error) }
                 }
               },
             }

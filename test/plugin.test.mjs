@@ -2,19 +2,10 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 
-import { buildCloneURL, originOf, projectName, proxyBaseURL } from "../proxy.mjs"
+import { originOf, projectName, proxyBaseURL } from "../proxy.mjs"
 import { passes, table } from "../models.mjs"
 import { KiloProxyVercelPlugin, _internal } from "../index.mjs"
-
-test("clone URL deploys the vercel-proxy subdirectory", () => {
-  const url = new URL(buildCloneURL("kilo-proxy-abcd1234"))
-  assert.equal(url.origin, "https://vercel.com")
-  assert.equal(url.pathname, "/new/clone")
-  assert.match(url.searchParams.get("repository-url"), /\/tree\/main\/vercel-proxy$/)
-  assert.equal(url.searchParams.get("project-name"), "kilo-proxy-abcd1234")
-  assert.equal(url.searchParams.get("repository-name"), "kilo-proxy-abcd1234")
-  assert.equal(url.searchParams.get("env"), null)
-})
+import { templateFiles } from "../vercel.mjs"
 
 test("generated projects and origins", () => {
   assert.match(projectName(), /^kilo-proxy-[0-9a-f]{24}$/)
@@ -55,6 +46,13 @@ test("vercel.json is a fixed Kilo reverse proxy", async () => {
   assert.equal(config.rewrites[0].destination, "https://ai-gateway.kilo.ai/$1")
 })
 
+test("templateFiles carries the proxy files for the API deployment", async () => {
+  const files = await templateFiles()
+  const map = Object.fromEntries(files.map((file) => [file.file, file.data]))
+  assert.ok(map["vercel.json"].includes("ai-gateway.kilo.ai"))
+  assert.ok(map["public/robots.txt"].length > 0)
+})
+
 test("config declares an OpenAI-compatible provider without a hardcoded catalogue", async () => {
   const plugin = await KiloProxyVercelPlugin({})
   const config = {}
@@ -68,6 +66,14 @@ test("per-account concurrency is unlimited by default and follows maxInflight", 
   assert.equal(byDefault.auth.maxConcurrency, undefined)
   const configured = await KiloProxyVercelPlugin({}, { maxInflight: 2 })
   assert.equal(configured.auth.maxConcurrency, 2)
+})
+
+test("auth offers the Vercel device method", async () => {
+  const plugin = await KiloProxyVercelPlugin({})
+  const method = plugin.auth.methods[0]
+  assert.equal(method.type, "oauth")
+  assert.equal(method.label, "Add a Kilo Vercel proxy node")
+  assert.equal(typeof method.authorize, "function")
 })
 
 test("loader points at the proxy and injects Kilo headers", async () => {
