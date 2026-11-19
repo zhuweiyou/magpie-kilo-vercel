@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "https://ai-gateway.kilo.ai/$1"
+    }
+  ]
+}

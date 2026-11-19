@@ -1,0 +1,23 @@
+{
+  "name": "magpie-kilo-vercel",
+  "version": "0.1.0",
+  "description": "magpie / OpenCode provider plugin for Kilo through a pure Vercel reverse proxy: each account is one kilo-proxy-<random>.vercel.app project, and the plugin speaks OpenAI itself",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": "./index.mjs",
+  "files": [
+    "index.mjs",
+    "proxy.mjs",
+    "models.mjs",
+    "README.md"
+  ],
+  "keywords": ["magpie", "opencode", "vercel", "kilo", "provider", "proxy"],
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/plugin.test.mjs"
+  }
+}
+
+
+
+
