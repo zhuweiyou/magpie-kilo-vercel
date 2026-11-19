@@ -19,26 +19,37 @@ export function passes(id, entry) {
   return value === "kilo-auto/free" || value === "openrouter/free" || value.endsWith(":free")
 }
 
+// Kilo's gateway accepts these reasoning_effort values (measured: an invalid
+// one answers 400 naming exactly this list).
+const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+function reasoningVariants(levels = REASONING_LEVELS) {
+  return Object.fromEntries(levels.map((level) => [level, { reasoningEffort: level }]))
+}
+
 function detailsOf(entry) {
   if (typeof entry === "string") {
-    return { id: entry, context: 200_000, output: 32_000, image: false }
+    return { id: entry, context: 200_000, output: 32_000, image: false, reasoning: false }
   }
   return {
     id: String(entry?.id ?? ""),
     context: Number(entry?.context ?? 200_000) || 200_000,
     output: Number(entry?.output ?? 32_000) || 32_000,
     image: !!entry?.image,
+    reasoning: !!entry?.reasoning,
   }
 }
 
 export function modelEntry(entry) {
   const detail = detailsOf(entry)
+  const variants = detail.reasoning ? reasoningVariants() : null
   return {
     id: detail.id,
     name: detail.id,
     api: { id: detail.id, npm: "@ai-sdk/openai-compatible" },
     limit: { context: detail.context, output: detail.output },
-    capabilities: { reasoning: false, toolcall: true, attachment: detail.image },
+    capabilities: { reasoning: detail.reasoning, toolcall: true, attachment: detail.image },
+    ...(variants ? { variants } : {}),
     free: true,
     cost: { input: 0, output: 0 },
     release_date: "",
@@ -83,11 +94,13 @@ export async function read(baseURL, { timeoutMs = 8000 } = {}) {
     if (!id || !passes(id, item)) continue
     const rawModalities = item?.architecture?.input_modalities
     const modalities = Array.isArray(rawModalities) ? rawModalities : []
+    const supported = Array.isArray(item?.supported_parameters) ? item.supported_parameters : []
     entries.push({
       id,
       context: Number(item?.context_length ?? item?.top_provider?.context_length) || 200_000,
       output: Number(item?.top_provider?.max_completion_tokens) || 32_000,
       image: modalities.includes("image"),
+      reasoning: supported.includes("reasoning") || supported.includes("reasoning_effort"),
     })
   }
   return entries.length ? entries : null

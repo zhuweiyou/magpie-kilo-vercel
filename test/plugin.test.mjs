@@ -38,11 +38,13 @@ test("free filtering follows isFree then the id rules", () => {
   assert.equal(passes("paid/model", { isFree: true }), true)
   const models = table([
     "kilo-auto/free",
-    { id: "nvidia/x:free", context: 1_000_000, output: 65_536, image: true },
+    { id: "nvidia/x:free", context: 1_000_000, output: 65_536, image: true, reasoning: true },
   ])
   assert.ok(models["kilo-auto/free"])
   assert.equal(models["nvidia/x:free"].limit.context, 1_000_000)
   assert.equal(models["nvidia/x:free"].capabilities.attachment, true)
+  assert.equal(models["nvidia/x:free"].capabilities.reasoning, true)
+  assert.equal(models["nvidia/x:free"].variants.high.reasoningEffort, "high")
 })
 
 test("vercel.json is a fixed Kilo reverse proxy", async () => {
