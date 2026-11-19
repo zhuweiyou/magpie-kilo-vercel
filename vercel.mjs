@@ -154,15 +154,14 @@ export async function ensureProject(access, name, signal) {
 }
 
 // API-created projects should not inherit the account's SSO deployment
-// protection; try to clear it, and if this API rejects the field just continue.
+// protection; clear it so the proxy is publicly reachable. This is the same
+// switch as the project's Deployment Protection setting — no password, no SSO.
 export async function clearProtection(access, projectID, signal) {
-  try {
-    await call(access, `/v9/projects/${encodeURIComponent(projectID)}`, {
-      method: "PATCH",
-      body: { ssoProtection: null },
-      signal,
-    })
-  } catch {}
+  await call(access, `/v9/projects/${encodeURIComponent(projectID)}`, {
+    method: "PATCH",
+    body: { ssoProtection: null },
+    signal,
+  })
 }
 
 // templateFiles reads the proxy configuration from this plugin's own folder.
